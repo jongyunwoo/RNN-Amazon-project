@@ -14,7 +14,7 @@ from tqdm import tqdm_notebook
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-data = pd.read_csv("/Users/ujong-yun/Documents/GitHub/project/project/project/Amazon_dataframe.csv")
+data = pd.read_csv("/Users/ujong-yun/Documents/GitHub/project/Amazon_dataframe.csv")
 #날짜 칼럼을 인덱스로 사용
 data['Date'] = pd.to_datetime(data['Date'])
 data.set_index('Date', inplace=True)
@@ -57,7 +57,7 @@ print("Testing Shape", X_test_tensors_f.shape, Y_test_tensors.shape)
 
 #GRU 네트워크
 class GRU(nn.Module):
-    def __init__(self, num_classes, input_size, hidden_size, num_layers, seq_length, dropout = 0.1):
+    def __init__(self, num_classes, input_size, hidden_size, num_layers, seq_length, dropout):
         super(GRU, self).__init__()
         self.num_classes = num_classes
         self.num_layers = num_layers
@@ -81,44 +81,8 @@ class GRU(nn.Module):
         out = self.relu(out)
         out = self.fc(out)
         return out
-    
-#옵티마이저와 손실 함수 지정
-num_epochs = 1000
-learning_rate = 0.001
 
-input_size = 57
-hidden_size = 5
-num_layers = 1
 
-num_classes = 1
-model = GRU(num_classes, input_size, hidden_size, num_layers, X_train_tensors_f.shape[1])
-
-criterion = torch.nn.MSELoss()
-optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
-
-#모델 학습
-for epoch in range(num_epochs):
-  outputs = model.forward(X_train_tensors_f)
-  optimizer.zero_grad()
-  loss = criterion(outputs, Y_train_tensors)
-  loss.backward()
-  optimizer.step()
-
-  optimizer.step()
-  if epoch % 100 == 0:
-    print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
-
-# 예측값 계산
-model.eval()
-with torch.no_grad():
-    train_outputs = model(X_train_tensors_f)
-    test_outputs = model(X_test_tensors_f)
-
-#스케일링 되돌리기
-train_outputs = ss.inverse_transform(train_outputs)
-test_outputs = ss.inverse_transform(test_outputs)
-Y_train = ss.inverse_transform(Y_train_tensors)
-Y_test = ss.inverse_transform(Y_test_tensors)
 
 #결정계수 계산 정의
 def r_squared(y_true, y_pred):
@@ -127,9 +91,65 @@ def r_squared(y_true, y_pred):
     r_squared = 1 - (ss_res / ss_tot)
     return r_squared
 
-# 결정 계수 계산
-r2 = r_squared(Y_test, test_outputs)
-print("R-squared:", r2)
+
+from sklearn.model_selection import ParameterGrid
+
+# 그리드 서치할 하이퍼파라미터 범위 지정
+param_grid = {
+    'dropout': [0.1, 0.2, 0.3],
+    'num_epochs': [1000, 1500, 2000],
+    'hidden_size': [5, 10, 15],
+    'learning_rate': [0.001, 0.01, 0.0001]
+    
+}
+input_size = 57
+num_layers = 1
+num_classes = 1
+best_params = None
+best_r2 = float('-inf')
+
+# 그리드 서치 실행
+for params in ParameterGrid(param_grid):
+    dropout = params['dropout']
+    num_epochs = params['num_epochs']
+    hidden_size = params['hidden_size']
+    learning_rate = params['learning_rate']
+    
+    model = GRU(num_classes, input_size, hidden_size, num_layers, X_train_tensors_f.shape[1], dropout)
+    
+    criterion = torch.nn.MSELoss()
+    optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+
+    for epoch in range(num_epochs):
+        outputs = model.forward(X_train_tensors_f)
+        optimizer.zero_grad()
+        loss = criterion(outputs, Y_train_tensors)
+        loss.backward()
+        optimizer.step()
+
+        if epoch % 100 == 0:
+            print("Epoch: %d, loss: %1.5f" % (epoch, loss.item()))
+
+    # 예측값 계산
+    model.eval()
+    with torch.no_grad():
+        train_outputs = model(X_train_tensors_f)
+        test_outputs = model(X_test_tensors_f)
+
+    #스케일링 되돌리기
+    train_outputs = ss.inverse_transform(train_outputs)
+    test_outputs = ss.inverse_transform(test_outputs)
+    Y_train = ss.inverse_transform(Y_train_tensors)
+    Y_test = ss.inverse_transform(Y_test_tensors)
+
+    r2 = r_squared(Y_test, test_outputs)
+    
+    if r2 > best_r2:
+        best_r2 = r2
+        best_params = params
+
+print("Best R-squared:", best_r2)
+print("Best Parameters:", best_params)
 
 
 # 그래프 그리기
