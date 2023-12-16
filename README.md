@@ -66,5 +66,3 @@ GRU의 R-squared는 dropout = 0.3, hidden_size =. 15, learning_rate =0.0001, num
 
 
 
-![image](https://github.com/jongyunwoo/project/assets/127372349/15ee2eee-d919-4a58-b23a-af06de94f59a)
-
